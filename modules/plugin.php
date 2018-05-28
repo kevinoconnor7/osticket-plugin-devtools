@@ -1,334 +1,6 @@
 <?php
 
-class Option
-{
-
-    public $default = false;
-
-    public function __construct($options = false)
-    {
-        list($this->short, $this->long) = array_slice($options, 0, 2);
-        $this->help = (isset($options['help'])) ? $options['help'] : "";
-        $this->action = (isset($options['action'])) ? $options['action']
-        : "store";
-        $this->dest = (isset($options['dest'])) ? $options['dest']
-        : substr($this->long, 2);
-        $this->type = (isset($options['type'])) ? $options['type']
-        : 'string';
-        $this->const = (isset($options['const'])) ? $options['const']
-        : null;
-        $this->default = (isset($options['default'])) ? $options['default']
-        : null;
-        $this->metavar = (isset($options['metavar'])) ? $options['metavar']
-        : 'var';
-        $this->nargs = (isset($options['nargs'])) ? $options['nargs']
-        : 1;
-    }
-
-    public function hasArg()
-    {
-        return $this->action != 'store_true'
-        && $this->action != 'store_false';
-    }
-
-    public function handleValue(&$destination, $args)
-    {
-        $nargs = 0;
-        $value = ($this->hasArg()) ? array_shift($args) : null;
-        if ($value[0] == '-') {
-            $value = null;
-        } elseif ($value) {
-            $nargs = 1;
-        }
-
-        if ($this->type == 'int') {
-            $value = (int) $value;
-        }
-
-        switch ($this->action) {
-            case 'store_true':
-                $value = true;
-                break;
-            case 'store_false':
-                $value = false;
-                break;
-            case 'store_const':
-                $value = $this->const;
-                break;
-            case 'append':
-                if (!isset($destination[$this->dest])) {
-                    $destination[$this->dest] = array($value);
-                } else {
-                    $T = &$destination[$this->dest];
-                    $T[] = $value;
-                    $value = $T;
-                }
-                break;
-            case 'store':
-            default:
-                break;
-        }
-        $destination[$this->dest] = $value;
-        return $nargs;
-    }
-
-    public function toString()
-    {
-        $short = explode(':', $this->short);
-        $long = explode(':', $this->long);
-        if ($this->nargs === '?') {
-            $switches = sprintf('    %s [%3$s], %s[=%3$s]', $short[0],
-                $long[0], $this->metavar);
-        } elseif ($this->hasArg()) {
-            $switches = sprintf('    %s %3$s, %s=%3$s', $short[0], $long[0],
-                $this->metavar);
-        } else {
-            $switches = sprintf("    %s, %s", $short[0], $long[0]);
-        }
-
-        $help = preg_replace('/\s+/', ' ', $this->help);
-        if (strlen($switches) > 23) {
-            $help = "\n" . str_repeat(" ", 24) . $help;
-        } else {
-            $switches = str_pad($switches, 24);
-        }
-
-        $help = wordwrap($help, 54, "\n" . str_repeat(" ", 24));
-        return $switches . $help;
-    }
-}
-
-class OutputStream
-{
-    public $stream;
-
-    public function __construct($stream)
-    {
-        $this->stream = fopen($stream, 'w');
-    }
-
-    public function write($what)
-    {
-        fwrite($this->stream, $what);
-    }
-}
-
-class Module
-{
-
-    public $options = array();
-    public $arguments = array();
-    public $prologue = "";
-    public $epilog = "";
-    public $usage = '$script [options] $args [arguments]';
-    public $autohelp = true;
-    public $module_name;
-
-    public $stdout;
-    public $stderr;
-
-    public $_options;
-    public $_args;
-
-    public function __construct()
-    {
-        $this->options['help'] = array("-h", "--help",
-            'action' => 'store_true',
-            'help' => "Display this help message");
-        foreach ($this->options as &$opt) {
-            $opt = new Option($opt);
-        }
-
-        $this->stdout = new OutputStream('php://output');
-        $this->stderr = new OutputStream('php://stderr');
-    }
-
-    public function showHelp()
-    {
-        if ($this->prologue) {
-            echo $this->prologue . "\n\n";
-        }
-
-        global $argv;
-        $manager = @$argv[0];
-
-        echo "Usage:\n";
-        echo "    " . str_replace(
-            array('$script', '$args'),
-            array($manager . " " . $this->module_name, implode(' ', array_keys($this->arguments))),
-            $this->usage) . "\n";
-
-        ksort($this->options);
-        if ($this->options) {
-            echo "\nOptions:\n";
-            foreach ($this->options as $name => $opt) {
-                echo $opt->toString() . "\n";
-            }
-
-        }
-
-        if ($this->arguments) {
-            echo "\nArguments:\n";
-            foreach ($this->arguments as $name => $help) {
-                $extra = '';
-                if (isset($help['options']) && is_array($help['options'])) {
-                    foreach ($help['options'] as $op => $desc) {
-                        $extra .= wordwrap(
-                            "\n        $op - $desc", 76, "\n            ");
-                    }
-
-                }
-                $help = $help['help'];
-                echo $name . "\n    " . wordwrap(
-                    preg_replace('/\s+/', ' ', $help), 76, "\n    ")
-                    . $extra . "\n";
-            }
-        }
-
-        if ($this->epilog) {
-            echo "\n\n";
-            $epilog = preg_replace('/\s+/', ' ', $this->epilog);
-            echo wordwrap($epilog, 76, "\n");
-        }
-
-        echo "\n";
-    }
-
-    public function fail($message, $showhelp = false)
-    {
-        $this->stderr->write($message . "\n");
-        if ($showhelp) {
-            $this->showHelp();
-        }
-
-        die();
-    }
-
-    public function getOption($name, $default = false)
-    {
-        $this->parseOptions();
-        if (isset($this->_options[$name])) {
-            return $this->_options[$name];
-        } elseif (isset($this->options[$name]) && $this->options[$name]->default) {
-            return $this->options[$name]->default;
-        } else {
-            return $default;
-        }
-
-    }
-
-    public function getArgument($name, $default = false)
-    {
-        $this->parseOptions();
-        if (isset($this->_args[$name])) {
-            return $this->_args[$name];
-        }
-
-        return $default;
-    }
-
-    public function parseOptions()
-    {
-        if (is_array($this->_options)) {
-            return;
-        }
-
-        global $argv;
-        list($this->_options, $this->_args) =
-        $this->parseArgs(array_slice($argv, 1));
-
-        foreach (array_keys($this->arguments) as $idx => $name) {
-            if (!is_array($this->arguments[$name])) {
-                $this->arguments[$name] = array(
-                    'help' => $this->arguments[$name]);
-            }
-
-            $this->arguments[$name]['idx'] = $idx;
-        }
-
-        foreach ($this->arguments as $name => $info) {
-            if (!isset($this->_args[$info['idx']])) {
-                if (isset($info['required']) && !$info['required']) {
-                    continue;
-                }
-
-                $this->optionError($name . " is a required argument");
-            } else {
-                $this->_args[$name] = &$this->_args[$info['idx']];
-            }
-        }
-
-        foreach ($this->options as $name => $opt) {
-            if (!isset($this->_options[$name])) {
-                $this->_options[$name] = $opt->default;
-            }
-        }
-
-        if ($this->autohelp && $this->getOption('help')) {
-            $this->showHelp();
-            die();
-        }
-    }
-
-    public function optionError($error)
-    {
-        echo "Error: " . $error . "\n\n";
-        $this->showHelp();
-        die();
-    }
-
-    public function _run($module_name)
-    {
-        $this->module_name = $module_name;
-        $this->parseOptions();
-        return $this->run($this->_args, $this->_options);
-    }
-
-    /* abstract */
-    public function run($args, $options)
-    {
-    }
-
-    /* static */
-    public function register($action, $class)
-    {
-        global $registered_modules;
-        $registered_modules[$action] = new $class();
-    }
-
-    /* static */public function getInstance($action)
-    {
-        global $registered_modules;
-        return $registered_modules[$action];
-    }
-
-    public function parseArgs($argv)
-    {
-        $options = $args = array();
-        $argv = array_slice($argv, 0);
-        while ($arg = array_shift($argv)) {
-            if (strpos($arg, '=') !== false) {
-                list($arg, $value) = explode('=', $arg, 2);
-                array_unshift($argv, $value);
-            }
-            $found = false;
-            foreach ($this->options as $opt) {
-                if ($opt->short == $arg || $opt->long == $arg) {
-                    if ($opt->handleValue($options, $argv)) {
-                        array_shift($argv);
-                    }
-
-                    $found = true;
-                }
-            }
-            if (!$found && $arg[0] != '-') {
-                $args[] = $arg;
-            }
-
-        }
-        return array($options, $args);
-    }
-}
+define('LIB_DIR', BASE_PATH . 'lib/');
 
 class PluginBuilder extends Module
 {
@@ -364,8 +36,6 @@ class PluginBuilder extends Module
             'help' => 'Crowdin project API key.'),
         'crowdin_project' => array('-p', '--project', 'metavar' => 'PROJECT',
             'help' => 'Crowdin project name.'),
-        'osticket' => array('-R', '--osticket', 'metavar' => 'ROOT',
-            'help' => 'Root of osTicket installation (required for language compilation)'),
     );
 
     static $crowdin_api_url = 'https://api.crowdin.com/api/project/{project}/{command}';
@@ -380,10 +50,6 @@ class PluginBuilder extends Module
         $this->crowdin_project = $options['crowdin_project'];
         if (!$this->crowdin_project && getenv('CROWDIN_PROJECT')) {
             $this->crowdin_project = getenv('CROWDIN_PROJECT');
-        }
-
-        if (@$options['osticket']) {
-            require $options['osticket'] . '/include/class.translation.php';
         }
 
         switch (strtolower($args['action'])) {
@@ -475,7 +141,7 @@ class PluginBuilder extends Module
 
                 foreach ($info['map'] as $lib => $local) {
                     $phar_path = trim($local, '/') . '/';
-                    $full = rtrim(dirname(__file__) . '/lib/' . $lib, '/') . '/';
+                    $full = rtrim(LIB_DIR . $lib, '/') . '/';
                     $files = new RecursiveIteratorIterator(
                         new RecursiveDirectoryIterator($full),
                         RecursiveIteratorIterator::SELF_FIRST);
@@ -515,7 +181,7 @@ class PluginBuilder extends Module
 
         // Add language files
         if (@$this->crowdin_key) {
-            foreach ($this->getLanguageFiles($plugin) as $name => $content) {
+            foreach ($this->getLanguageFiles($plugin_name) as $name => $content) {
                 $name = ltrim($name, '/');
                 if (!$content) {
                     continue;
@@ -549,7 +215,7 @@ class PluginBuilder extends Module
                 }
 
                 foreach ($info['map'] as $lib => $local) {
-                    $source = dirname(__file__) . '/lib/' . $lib;
+                    $source = LIB_DIR . $lib;
                     $dest = dirname($plugin) . '/' . $local;
                     if ($this->options['verbose']) {
                         $left = str_replace(dirname(__file__) . '/', '', $source);
@@ -615,7 +281,7 @@ class PluginBuilder extends Module
     {
 
         $url = str_replace(array('{command}', '{project}'),
-            array($command, self::$crowdin_project),
+            array($command, $this->crowdin_project),
             self::$crowdin_api_url);
 
         $args += array('key' => $this->crowdin_key);
@@ -637,6 +303,7 @@ class PluginBuilder extends Module
 
         if ($code != 200) {
             $this->stderr->write($code . ": Bad status from Crowdin fetching translations\n");
+            $this->stderr->write($body);
             return $langs;
         }
         $d = new DOMDocument();
@@ -664,12 +331,9 @@ class PluginBuilder extends Module
         return $langs;
     }
 
-    public function getLanguageFiles($plugin)
+    public function getLanguageFiles($plugin_name)
     {
         $files = array();
-        if (!class_exists('Translation')) {
-            $this->stderr->write("Specify osTicket root path to compile MO files\n");
-        }
 
         foreach ($this->getTranslations() as $lang) {
             list($code, $stuff) = $this->_crowdin("download/$lang.zip");
@@ -691,10 +355,10 @@ class PluginBuilder extends Module
 
             for ($i = 0; $i < $zip->numFiles; $i++) {
                 $info = $zip->statIndex($i);
-                if (strpos($info['name'], $plugin) === 0) {
-                    $name = substr($info['name'], strlen($plugin));
+                if (strpos($info['name'], $plugin_name) === 0) {
+                    $name = substr($info['name'], strlen($plugin_name));
                     $name = ltrim($name, '/');
-                    if (substr($name, -3) == '.po' && class_exists('Translation')) {
+                    if (substr($name, -3) == '.po') {
                         $content = $this->buildMo($zip->getFromIndex($i));
                         $name = substr($name, 0, -3) . '.mo.php';
                     } else {
@@ -703,7 +367,10 @@ class PluginBuilder extends Module
                     // Files in the plugin are laid out by (lang)/(file),
                     // where (file) has the plugin name removed. Files on
                     // Crowdin are organized by (plugin)/file
+                    $this->stderr->write("$lang: Writing to output.\n");
                     $files["$lang/{$name}"] = $content;
+                } else {
+                    $this->stderr->write("$lang: skipping " . $info['name'] . ".\n");
                 }
             }
             $zip->close();
@@ -713,6 +380,7 @@ class PluginBuilder extends Module
 
     public function buildMo($po_contents)
     {
+        require_once INCLUDES_DIR . 'translation.php';
         $pipes = array();
         $msgfmt = proc_open('msgfmt -o- -',
             array(0 => array('pipe', 'r'), 1 => array('pipe', 'w')),
@@ -803,12 +471,5 @@ EOF;
 
     }
 }
-$registered_modules = array();
 
-if (php_sapi_name() != "cli") {
-    die("Management only supported from command-line\n");
-}
-
-$builder = new PluginBuilder();
-$builder->parseOptions();
-$builder->_run(basename(__file__));
+Module::register('plugin', 'PluginBuilder');
