@@ -332,12 +332,11 @@ class Module
 
 class PluginBuilder extends Module
 {
-    public $prologue =
-        "Inspects, tests, and builds a plugin PHAR file";
+    public $prologue = 'Inspects, tests, and builds a plugin PHAR file';
 
     public $arguments = array(
         'action' => array(
-            'help' => "What to do with the plugin",
+            'help' => 'What to do with the plugin',
             'options' => array(
                 'build' => 'Compile a PHAR file for a plugin',
                 'hydrate' => 'Prep plugin folders for embedding in osTicket directly',
@@ -361,20 +360,26 @@ class PluginBuilder extends Module
             'Compress source files when hydrading and building. Useful for
             saving space when building PHAR files',
             'action' => 'store_true', 'default' => false),
-        "key" => array('-k', '--key', 'metavar' => 'API-KEY',
+        'crowdin_key' => array('-k', '--key', 'metavar' => 'API-KEY',
             'help' => 'Crowdin project API key.'),
+        'crowdin_project' => array('-p', '--project', 'metavar' => 'PROJECT',
+            'help' => 'Crowdin project name.'),
         'osticket' => array('-R', '--osticket', 'metavar' => 'ROOT',
             'help' => 'Root of osTicket installation (required for language compilation)'),
     );
 
-    static $project = 'osticket-plugins';
     static $crowdin_api_url = 'https://api.crowdin.com/api/project/{project}/{command}';
 
     public function run($args, $options)
     {
-        $this->key = $options['key'];
-        if (!$this->key && defined('CROWDIN_API_KEY')) {
-            $this->key = CROWDIN_API_KEY;
+        $this->crowdin_key = $options['crowdin_key'];
+        if (!$this->crowdin_key && getenv('CROWDIN_API_KEY')) {
+            $this->crowdin_key = getenv('CROWDIN_API_KEY');
+        }
+
+        $this->crowdin_project = $options['crowdin_project'];
+        if (!$this->crowdin_project && getenv('CROWDIN_PROJECT')) {
+            $this->crowdin_project = getenv('CROWDIN_PROJECT');
         }
 
         if (@$options['osticket']) {
@@ -506,7 +511,7 @@ class PluginBuilder extends Module
         }
 
         // Add language files
-        if (@$this->key) {
+        if (@$this->crowdin_key) {
             foreach ($this->getLanguageFiles($plugin) as $name => $content) {
                 $name = ltrim($name, '/');
                 if (!$content) {
@@ -606,10 +611,10 @@ class PluginBuilder extends Module
     {
 
         $url = str_replace(array('{command}', '{project}'),
-            array($command, self::$project),
+            array($command, self::$crowdin_project),
             self::$crowdin_api_url);
 
-        $args += array('key' => $this->key);
+        $args += array('key' => $this->crowdin_key);
         foreach ($args as &$a) {
             $a = urlencode($a);
         }
