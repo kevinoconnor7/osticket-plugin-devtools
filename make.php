@@ -353,7 +353,7 @@ class PluginBuilder extends Module
     public $options = array(
         'sign' => array('-S', '--sign', 'metavar' => 'KEY', 'help' =>
             'Sign the compiled PHAR file with the provided OpenSSL private
-            key file', ),
+            key file'),
         'verbose' => array('-v', '--verbose', 'help' =>
             'Be more verbose', 'default' => false, 'action' => 'store_true'),
         'compress' => array('-z', '--compress', 'help' =>
@@ -439,8 +439,9 @@ class PluginBuilder extends Module
 
     public function _build($plugin, $options)
     {
-        @unlink("$plugin.phar");
-        $phar = new Phar("$plugin.phar");
+        $plugin_name = basename($plugin);
+        @unlink($plugin_name . '.phar');
+        $phar = new Phar($plugin_name . '.phar');
         $phar->startBuffering();
 
         if ($options['sign']) {
@@ -455,10 +456,12 @@ class PluginBuilder extends Module
             $phar->setSignatureAlgorithm(Phar::OPENSSL, $pkey);
         }
 
-        // Read plugin info
-        $info = (include "$plugin/plugin.php");
+        $plugin_file = $plugin . '/plugin.php';
 
-        $this->resolveDependencies(false);
+        // Read plugin info
+        $info = (include $plugin_file);
+
+        $this->resolveDependencies(array($plugin_file), false);
 
         $phar->buildFromDirectory($plugin);
 
@@ -530,10 +533,11 @@ class PluginBuilder extends Module
 
     public function _hydrate($options)
     {
-        $this->resolveDependencies();
+        $plugins = glob(dirname(__file__) . '/*/plugin.php');
+        $this->resolveDependencies($plugins);
 
         // Move things into place
-        foreach (glob(dirname(__file__) . '/*/plugin.php') as $plugin) {
+        foreach ($plugins as $plugin) {
             $p = (include $plugin);
             if (!isset($p['requires']) || !is_array($p['requires'])) {
                 continue;
@@ -746,24 +750,24 @@ class PluginBuilder extends Module
         fclose($fp);
     }
 
-    public function resolveDependencies($autoupdate = true)
+    public function resolveDependencies($plugins, $autoupdate = true)
     {
         // Build dependency list
         $requires = array();
-        foreach (glob(dirname(__file__) . '/*/plugin.php') as $plugin) {
+
+        foreach ($plugins as $plugin) {
             $p = (include $plugin);
             if (isset($p['requires'])) {
                 foreach ($p['requires'] as $lib => $info) {
                     $requires[$lib] = $info['version'];
                 }
             }
-
         }
 
         // Write composer.json file
         $composer = <<<EOF
 {
-    "name": "osTicket/core-plugins",
+    "name": "osTicket/plugin-devtools",
     "repositories": [
         {
             "type": "pear",
