@@ -354,7 +354,7 @@ class PluginBuilder extends Module
     public $options = array(
         'sign' => array('-S', '--sign', 'metavar' => 'KEY', 'help' =>
             'Sign the compiled PHAR file with the provided OpenSSL private
-            key file'),
+            key file', ),
         'verbose' => array('-v', '--verbose', 'help' =>
             'Be more verbose', 'default' => false, 'action' => 'store_true'),
         'compress' => array('-z', '--compress', 'help' =>
@@ -368,7 +368,7 @@ class PluginBuilder extends Module
     );
 
     static $project = 'osticket-plugins';
-    static $crowdin_api_url = 'http://i18n.osticket.com/api/project/{project}/{command}';
+    static $crowdin_api_url = 'https://api.crowdin.com/api/project/{project}/{command}';
 
     public function run($args, $options)
     {
