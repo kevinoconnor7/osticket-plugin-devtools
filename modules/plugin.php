@@ -303,7 +303,6 @@ class PluginBuilder extends Module
 
         if ($code != 200) {
             $this->stderr->write($code . ": Bad status from Crowdin fetching translations\n");
-            $this->stderr->write($body);
             return $langs;
         }
         $d = new DOMDocument();
@@ -338,7 +337,7 @@ class PluginBuilder extends Module
         foreach ($this->getTranslations() as $lang) {
             list($code, $stuff) = $this->_crowdin("download/$lang.zip");
             if ($code != 200) {
-                $this->stderr->write("$lang: Unable to download language files\n");
+                $this->stdout->write("$lang: Unable to download language files\n");
                 continue;
             }
 
@@ -369,8 +368,6 @@ class PluginBuilder extends Module
                     // Crowdin are organized by (plugin)/file
                     $this->stderr->write("$lang: Writing to output.\n");
                     $files["$lang/{$name}"] = $content;
-                } else {
-                    $this->stderr->write("$lang: skipping " . $info['name'] . ".\n");
                 }
             }
             $zip->close();
