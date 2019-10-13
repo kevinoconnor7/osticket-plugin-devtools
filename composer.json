@@ -1,0 +1,8 @@
+{
+    "name": "kevinoconnor7/osticket-plugin-devtools",
+    "description": "Build tools for packaging osticket plugins.",
+    "license": "GPL-2.0-only",
+    "require": {
+        "php": ">=5.3.0"
+    }
+}
