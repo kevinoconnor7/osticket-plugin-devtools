@@ -433,12 +433,6 @@ class PluginBuilder extends Module
         $composer = <<<EOF
 {
     "name": "osTicket/plugin-devtools",
-    "repositories": [
-        {
-            "type": "pear",
-            "url": "https://pear.php.net"
-        }
-    ],
     "require": %s,
     "config": {
         "vendor-dir": "lib"
