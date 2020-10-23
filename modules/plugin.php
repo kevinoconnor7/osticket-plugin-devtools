@@ -432,7 +432,7 @@ class PluginBuilder extends Module
         // Write composer.json file
         $composer = <<<EOF
 {
-    "name": "osTicket/plugin-devtools",
+    "name": "osticket/plugin-devtools",
     "require": %s,
     "config": {
         "vendor-dir": "lib"
