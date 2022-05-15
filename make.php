@@ -391,9 +391,10 @@ class PluginBuilder extends Module {
         }
 
         // Read plugin info
-        $info = (include "$plugin/plugin.php");
+        $plugin_file = "$plugin/plugin.php";
+        $info = (include $plugin_file);
 
-        $this->resolveDependencies(false);
+        $this->resolveDependencies(array($plugin_file), false);
 
         $phar->buildFromDirectory($plugin);
 
@@ -454,10 +455,11 @@ class PluginBuilder extends Module {
     }
 
     function _hydrate($options) {
-        $this->resolveDependencies();
+        $plugin_files = glob(dirname(__file__).'/*/plugin.php');
+        $this->resolveDependencies($plugin_files);
 
         // Move things into place
-        foreach (glob(dirname(__file__).'/*/plugin.php') as $plugin) {
+        foreach ($plugin_files as $plugin) {
             $p = (include $plugin);
             if ((!isset($p['requires']) || !is_array($p['requires'])) && !isset($p['map']))
                 continue;
@@ -664,10 +666,10 @@ class PluginBuilder extends Module {
         fclose($fp);
     }
 
-    function resolveDependencies($autoupdate=true) {
+    function resolveDependencies($plugin_files, $autoupdate=true) {
         // Build dependency list
         $requires = array();
-        foreach (glob(dirname(__file__).'/*/plugin.php') as $plugin) {
+        foreach ($plugin_files as $plugin) {
             $p = (include $plugin);
             if (isset($p['requires']))
                 foreach ($p['requires'] as $lib=>$info)
